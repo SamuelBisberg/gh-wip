@@ -37,7 +37,7 @@ func runPush() error {
 		return fmt.Errorf("checking working tree status: %w", err)
 	}
 	if !dirty {
-		theme.Infof("Nothing to push — working tree is clean.")
+		theme.Infof("Nothing to push - working tree is clean.")
 		return nil
 	}
 
@@ -66,7 +66,7 @@ func runPush() error {
 	message := defaultCommitMessage(originalBranch)
 	if provider, ok := ai.New(cfg); ok {
 		if !provider.Available() {
-			theme.Warningf("%s isn't installed or on PATH — using a default commit message.", provider.Name())
+			theme.Warningf("%s isn't installed or on PATH - using a default commit message.", provider.Name())
 		} else {
 			var summary string
 			spinErr := theme.RunWithSpinner(fmt.Sprintf("Generating summary with %s", provider.Name()), func() error {
@@ -77,7 +77,7 @@ func runPush() error {
 				return sErr
 			})
 			if spinErr != nil {
-				theme.Warningf("AI summary failed (%v) — using a default commit message.", spinErr)
+				theme.Warningf("AI summary failed (%v) - using a default commit message.", spinErr)
 			} else {
 				message = summary
 			}

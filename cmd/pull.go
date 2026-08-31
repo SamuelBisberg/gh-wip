@@ -36,7 +36,7 @@ func runPull(deleteFlag bool) error {
 		return fmt.Errorf("checking working tree status: %w", err)
 	}
 	if dirty {
-		return fmt.Errorf("you have uncommitted changes — commit, stash, or run `gh wip push` before pulling a WIP branch")
+		return fmt.Errorf("you have uncommitted changes - commit, stash, or run `gh wip push` before pulling a WIP branch")
 	}
 
 	cfg, theme, err := loadTheme()
@@ -89,7 +89,7 @@ func runPull(deleteFlag bool) error {
 		return nil
 	}
 
-	theme.Successf("Merged %s — changes are staged in your working directory, uncommitted.", chosen.Name)
+	theme.Successf("Merged %s - changes are staged in your working directory, uncommitted.", chosen.Name)
 
 	shouldDelete := deleteFlag || cfg.Pull.AutoDelete
 	if !shouldDelete {

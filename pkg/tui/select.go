@@ -21,7 +21,7 @@ func SelectWipBranch(branches []git.WipBranch) (git.WipBranch, error) {
 	options := make([]huh.Option[string], 0, len(branches))
 	for _, b := range branches {
 		byName[b.Name] = b
-		label := fmt.Sprintf("%s  —  %s  —  %s (%s)", b.Name, humanize.Time(b.When), b.Subject, b.Author)
+		label := fmt.Sprintf("%s  -  %s  -  %s (%s)", b.Name, humanize.Time(b.When), b.Subject, b.Author)
 		options = append(options, huh.NewOption(label, b.Name))
 	}
 

@@ -23,7 +23,7 @@ func preflight() error {
 func checkAuth() error {
 	host, _ := auth.DefaultHost()
 	if token, _ := auth.TokenForHost(host); token == "" {
-		return fmt.Errorf("not logged in to %s — run `gh auth login` first", host)
+		return fmt.Errorf("not logged in to %s - run `gh auth login` first", host)
 	}
 	return nil
 }

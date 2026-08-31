@@ -12,7 +12,7 @@ func NewRootCmd() *cobra.Command {
 		Use:   "wip",
 		Short: "Capture and restore work-in-progress state via GitHub",
 		Long: "gh-wip lets you quickly stash uncommitted changes onto a remote wip/ branch\n" +
-			"and pull them back down later — from this machine or any other.",
+			"and pull them back down later - from this machine or any other.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       Version,

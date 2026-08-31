@@ -8,7 +8,7 @@ import (
 )
 
 // loadTheme loads the persisted config and builds the matching color theme
-// — the first thing every subcommand needs before it can print anything.
+// - the first thing every subcommand needs before it can print anything.
 func loadTheme() (*config.Config, *tui.Theme, error) {
 	cfg, err := config.Load()
 	if err != nil {
