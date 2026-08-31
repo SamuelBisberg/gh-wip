@@ -8,9 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/SamuelBisberg/gh-wip/pkg/ai"
-	"github.com/SamuelBisberg/gh-wip/pkg/config"
 	"github.com/SamuelBisberg/gh-wip/pkg/git"
-	"github.com/SamuelBisberg/gh-wip/pkg/tui"
 )
 
 func newPushCmd() *cobra.Command {
@@ -25,10 +23,12 @@ func newPushCmd() *cobra.Command {
 }
 
 func runPush() error {
-	if !git.IsInsideRepo() {
-		return fmt.Errorf("not a git repository")
+	if err := preflight(); err != nil {
+		return err
 	}
-	if err := checkAuth(); err != nil {
+
+	cfg, theme, err := loadTheme()
+	if err != nil {
 		return err
 	}
 
@@ -36,13 +36,6 @@ func runPush() error {
 	if err != nil {
 		return fmt.Errorf("checking working tree status: %w", err)
 	}
-
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-	theme := tui.New(cfg)
-
 	if !dirty {
 		theme.Infof("Nothing to push — working tree is clean.")
 		return nil
@@ -52,6 +45,15 @@ func runPush() error {
 	if err != nil {
 		return fmt.Errorf("determining current branch: %w", err)
 	}
+	// However this command exits, leave the user back on the branch they
+	// started on: the WIP branch (with the commit already on it, if we got
+	// that far) is the working copy from here on.
+	defer func() {
+		if err := git.Checkout(originalBranch); err != nil {
+			theme.Warningf("Couldn't switch back to %s automatically: %v", originalBranch, err)
+		}
+	}()
+
 	remote, err := git.DefaultRemote()
 	if err != nil {
 		return err
@@ -94,18 +96,12 @@ func runPush() error {
 		return git.Commit(message)
 	})
 	if commitErr != nil {
-		_ = git.Checkout(originalBranch)
 		return fmt.Errorf("capturing WIP changes: %w", commitErr)
 	}
 
 	pushErr := theme.RunWithSpinner(fmt.Sprintf("Pushing %s to %s", branchName, remote), func() error {
 		return git.Push(remote, branchName)
 	})
-
-	if err := git.Checkout(originalBranch); err != nil {
-		theme.Warningf("Couldn't switch back to %s automatically: %v", originalBranch, err)
-	}
-
 	if pushErr != nil {
 		theme.Warningf("Committed locally to %s, but pushing to %s failed: %v", branchName, remote, pushErr)
 		theme.Infof("Your changes are safe locally. Retry with: git push -u %s %s", remote, branchName)

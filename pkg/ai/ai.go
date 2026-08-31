@@ -4,8 +4,10 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -76,4 +78,31 @@ func cleanMessage(s string) string {
 		return ""
 	}
 	return s
+}
+
+// runCapture runs cmd (already fully configured by the caller, including
+// context and any stdin), and returns its cleaned stdout as a summary. It's
+// the shared plumbing behind every Provider: capture output, distinguish a
+// timeout from any other failure, and reject an empty result.
+func runCapture(ctx context.Context, cmd *exec.Cmd, name string) (string, error) {
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("%s timed out", name)
+		}
+		msg := stderr.String()
+		if msg == "" {
+			msg = err.Error()
+		}
+		return "", fmt.Errorf("%s: %s", name, msg)
+	}
+
+	message := cleanMessage(stdout.String())
+	if message == "" {
+		return "", fmt.Errorf("%s returned an empty summary", name)
+	}
+	return message, nil
 }

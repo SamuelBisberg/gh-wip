@@ -10,12 +10,15 @@ import (
 	"strings"
 )
 
-// CommandError wraps a failed git invocation with its stderr output so
-// callers can surface something more useful than a bare exit status.
+// CommandError wraps a failed git invocation with its stderr output and
+// exit code so callers can surface something more useful than a bare exit
+// status, and branch on the exit code instead of matching human-readable
+// (and locale-dependent) output text.
 type CommandError struct {
-	Args   []string
-	Stderr string
-	Err    error
+	Args     []string
+	Stderr   string
+	ExitCode int
+	Err      error
 }
 
 func (e *CommandError) Error() string {
@@ -26,10 +29,24 @@ func (e *CommandError) Error() string {
 	return fmt.Sprintf("git %s: %s", strings.Join(e.Args, " "), stderr)
 }
 
-func (e *CommandError) Unwrap() error { return e.Err }
+func newCommandError(args []string, stderr string, err error) *CommandError {
+	ce := &CommandError{Args: args, Stderr: stderr, Err: err}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		ce.ExitCode = exitErr.ExitCode()
+	}
+	return ce
+}
 
 // run executes git with the given args in the current working directory,
-// returning trimmed stdout. On failure it returns a *CommandError.
+// returning stdout with its trailing newline removed. On failure it returns
+// a *CommandError.
+//
+// Only the trailing newline is trimmed, not all leading/trailing whitespace:
+// several callers (Status, WorkingDiff) parse column-sensitive formats like
+// `git status --porcelain` where a line can legitimately start with a space
+// (e.g. " M file.txt"), and a blanket TrimSpace would eat that space when
+// it's the first character of the whole output.
 func run(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	var stdout, stderr bytes.Buffer
@@ -37,9 +54,9 @@ func run(args ...string) (string, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", &CommandError{Args: args, Stderr: stderr.String(), Err: err}
+		return "", newCommandError(args, stderr.String(), err)
 	}
-	return strings.TrimSpace(stdout.String()), nil
+	return strings.TrimRight(stdout.String(), "\n"), nil
 }
 
 // runCombined behaves like run but returns stdout+stderr together even on
@@ -51,9 +68,9 @@ func runCombined(args ...string) (string, error) {
 	cmd.Stderr = &out
 
 	err := cmd.Run()
-	output := strings.TrimSpace(out.String())
+	output := strings.TrimRight(out.String(), "\n")
 	if err != nil {
-		return output, &CommandError{Args: args, Stderr: output, Err: err}
+		return output, newCommandError(args, output, err)
 	}
 	return output, nil
 }
@@ -64,14 +81,43 @@ func IsInsideRepo() bool {
 	return err == nil && out == "true"
 }
 
+// StatusEntry is one line of `git status --porcelain` output: a two-letter
+// status code (e.g. "M ", "??", " M") and the path it applies to.
+type StatusEntry struct {
+	Code string
+	Path string
+}
+
+// Status returns the working tree's porcelain status, one entry per staged,
+// unstaged, or untracked path.
+func Status() ([]StatusEntry, error) {
+	out, err := run("status", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	if out == "" {
+		return nil, nil
+	}
+
+	lines := strings.Split(out, "\n")
+	entries := make([]StatusEntry, 0, len(lines))
+	for _, line := range lines {
+		if len(line) < 4 {
+			continue
+		}
+		entries = append(entries, StatusEntry{Code: line[:2], Path: line[3:]})
+	}
+	return entries, nil
+}
+
 // HasUncommittedChanges reports whether the working tree has staged,
 // unstaged, or untracked changes.
 func HasUncommittedChanges() (bool, error) {
-	out, err := run("status", "--porcelain")
+	entries, err := Status()
 	if err != nil {
 		return false, err
 	}
-	return out != "", nil
+	return len(entries) > 0, nil
 }
 
 // CurrentBranch returns the name of the currently checked-out branch.
@@ -106,18 +152,24 @@ func WorkingDiff() (string, error) {
 		return "", err
 	}
 
-	untracked, err := run("ls-files", "--others", "--exclude-standard")
+	entries, err := Status()
 	if err != nil {
 		return "", err
 	}
-	if untracked == "" {
+	var untracked []string
+	for _, e := range entries {
+		if e.Code == "??" {
+			untracked = append(untracked, e.Path)
+		}
+	}
+	if len(untracked) == 0 {
 		return diff, nil
 	}
 
 	var b strings.Builder
 	b.WriteString(diff)
 	b.WriteString("\n\nUntracked files:\n")
-	for _, f := range strings.Split(untracked, "\n") {
+	for _, f := range untracked {
 		b.WriteString("  " + f + "\n")
 	}
 	return b.String(), nil
@@ -181,6 +233,13 @@ type MergeSquashResult struct {
 // staged/uncommitted rather than creating a merge commit. On conflicts it
 // returns Conflict=true instead of an error, since git leaves the tree in a
 // resolvable state (conflict markers, nothing to abort) for squash merges.
+//
+// Conflicts are detected via git's exit code 1 rather than matching
+// human-readable ("CONFLICT ...") output text, which is both fragile
+// (wording varies across git versions) and locale-dependent. Callers are
+// expected to have already confirmed a clean working tree before calling
+// this, which rules out git's other exit-1 case (local changes that would
+// be overwritten by the merge).
 func MergeSquash(ref string) (*MergeSquashResult, error) {
 	output, err := runCombined("merge", "--squash", ref)
 	if err == nil {
@@ -188,7 +247,7 @@ func MergeSquash(ref string) (*MergeSquashResult, error) {
 	}
 
 	var cmdErr *CommandError
-	if errors.As(err, &cmdErr) && (strings.Contains(output, "CONFLICT") || strings.Contains(output, "Automatic merge failed")) {
+	if errors.As(err, &cmdErr) && cmdErr.ExitCode == 1 {
 		return &MergeSquashResult{Conflict: true, Output: output}, nil
 	}
 	return nil, err

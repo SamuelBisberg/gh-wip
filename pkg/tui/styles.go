@@ -44,18 +44,22 @@ func New(cfg *config.Config) *Theme {
 	}
 }
 
+// Successf prints a "✓"-prefixed success message to stdout.
 func (t *Theme) Successf(format string, a ...any) {
 	fmt.Println(t.Success.Render("✓") + " " + fmt.Sprintf(format, a...))
 }
 
+// Errorf prints a "✗"-prefixed error message to stderr.
 func (t *Theme) Errorf(format string, a ...any) {
 	fmt.Fprintln(os.Stderr, t.Error.Render("✗")+" "+fmt.Sprintf(format, a...))
 }
 
+// Warningf prints a "⚠"-prefixed warning message to stdout.
 func (t *Theme) Warningf(format string, a ...any) {
 	fmt.Println(t.Warning.Render("⚠") + " " + fmt.Sprintf(format, a...))
 }
 
+// Infof prints an "ℹ"-prefixed informational message to stdout.
 func (t *Theme) Infof(format string, a ...any) {
 	fmt.Println(t.Info.Render("ℹ") + " " + fmt.Sprintf(format, a...))
 }

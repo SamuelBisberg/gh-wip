@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/SamuelBisberg/gh-wip/pkg/config"
 	"github.com/SamuelBisberg/gh-wip/pkg/git"
 	"github.com/SamuelBisberg/gh-wip/pkg/tui"
 )
@@ -28,10 +27,7 @@ func newPullCmd() *cobra.Command {
 }
 
 func runPull(deleteFlag bool) error {
-	if !git.IsInsideRepo() {
-		return fmt.Errorf("not a git repository")
-	}
-	if err := checkAuth(); err != nil {
+	if err := preflight(); err != nil {
 		return err
 	}
 
@@ -43,11 +39,10 @@ func runPull(deleteFlag bool) error {
 		return fmt.Errorf("you have uncommitted changes — commit, stash, or run `gh wip push` before pulling a WIP branch")
 	}
 
-	cfg, err := config.Load()
+	cfg, theme, err := loadTheme()
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-	theme := tui.New(cfg)
 
 	remote, err := git.DefaultRemote()
 	if err != nil {
@@ -97,7 +92,7 @@ func runPull(deleteFlag bool) error {
 	theme.Successf("Merged %s — changes are staged in your working directory, uncommitted.", chosen.Name)
 
 	shouldDelete := deleteFlag || cfg.Pull.AutoDelete
-	if !deleteFlag && !cfg.Pull.AutoDelete {
+	if !shouldDelete {
 		ok, cErr := tui.ConfirmDelete(chosen.Name)
 		if cErr != nil && !errors.Is(cErr, tui.ErrAborted) {
 			return fmt.Errorf("confirming branch deletion: %w", cErr)

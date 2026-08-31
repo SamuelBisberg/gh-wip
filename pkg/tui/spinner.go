@@ -38,9 +38,10 @@ func (t *Theme) RunWithSpinner(label string, fn func() error) error {
 		}
 	}()
 
-	err := fn()
-	close(done)
-	<-stopped
-	fmt.Print("\r\033[K")
-	return err
+	defer func() {
+		close(done)
+		<-stopped
+		fmt.Print("\r\033[K")
+	}()
+	return fn()
 }

@@ -8,12 +8,18 @@ import (
 	"path/filepath"
 )
 
+// AI driver values for the "ai.driver" setting: which summarizer, if any,
+// generates the commit message for `gh wip push`.
 const (
 	DriverNone    = "none"
 	DriverClaude  = "claude"
 	DriverCopilot = "copilot"
 	DriverCustom  = "custom"
+)
 
+// Color values for the "ui.color" setting: whether to force, suppress, or
+// auto-detect ANSI color output.
+const (
 	ColorAuto   = "auto"
 	ColorAlways = "always"
 	ColorNever  = "never"
@@ -95,57 +101,97 @@ func (c *Config) Save() error {
 	return nil
 }
 
+// settingField is one entry in the config schema: a dotted key plus how to
+// read and validate/write it. Get, Set, and Keys all derive from the single
+// fields table below, so adding a setting means adding one entry instead of
+// touching three separate switch statements that could drift out of sync.
+type settingField struct {
+	key string
+	get func(*Config) string
+	set func(*Config, string) error
+}
+
+var fields = []settingField{
+	{
+		key: "ai.driver",
+		get: func(c *Config) string { return c.AI.Driver },
+		set: func(c *Config, v string) error {
+			switch v {
+			case DriverNone, DriverClaude, DriverCopilot, DriverCustom:
+				c.AI.Driver = v
+				return nil
+			default:
+				return fmt.Errorf("invalid ai.driver %q (want one of: none, claude, copilot, custom)", v)
+			}
+		},
+	},
+	{
+		key: "ai.customCommand",
+		get: func(c *Config) string { return c.AI.CustomCommand },
+		set: func(c *Config, v string) error { c.AI.CustomCommand = v; return nil },
+	},
+	{
+		key: "pull.autoDelete",
+		get: func(c *Config) string { return fmt.Sprintf("%t", c.Pull.AutoDelete) },
+		set: func(c *Config, v string) error {
+			switch v {
+			case "true":
+				c.Pull.AutoDelete = true
+			case "false":
+				c.Pull.AutoDelete = false
+			default:
+				return fmt.Errorf("invalid pull.autoDelete %q (want true or false)", v)
+			}
+			return nil
+		},
+	},
+	{
+		key: "ui.color",
+		get: func(c *Config) string { return c.UI.Color },
+		set: func(c *Config, v string) error {
+			switch v {
+			case ColorAuto, ColorAlways, ColorNever:
+				c.UI.Color = v
+				return nil
+			default:
+				return fmt.Errorf("invalid ui.color %q (want one of: auto, always, never)", v)
+			}
+		},
+	},
+}
+
+func lookupField(key string) (settingField, error) {
+	for _, f := range fields {
+		if f.key == key {
+			return f, nil
+		}
+	}
+	return settingField{}, fmt.Errorf("unknown config key %q", key)
+}
+
 // Get returns the string value stored at a dotted key, e.g. "ai.driver".
 func (c *Config) Get(key string) (string, error) {
-	switch key {
-	case "ai.driver":
-		return c.AI.Driver, nil
-	case "ai.customCommand":
-		return c.AI.CustomCommand, nil
-	case "pull.autoDelete":
-		return fmt.Sprintf("%t", c.Pull.AutoDelete), nil
-	case "ui.color":
-		return c.UI.Color, nil
-	default:
-		return "", fmt.Errorf("unknown config key %q", key)
+	f, err := lookupField(key)
+	if err != nil {
+		return "", err
 	}
+	return f.get(c), nil
 }
 
 // Set validates and assigns a value to a dotted key, e.g. "ai.driver".
 func (c *Config) Set(key, value string) error {
-	switch key {
-	case "ai.driver":
-		switch value {
-		case DriverNone, DriverClaude, DriverCopilot, DriverCustom:
-			c.AI.Driver = value
-		default:
-			return fmt.Errorf("invalid ai.driver %q (want one of: none, claude, copilot, custom)", value)
-		}
-	case "ai.customCommand":
-		c.AI.CustomCommand = value
-	case "pull.autoDelete":
-		switch value {
-		case "true":
-			c.Pull.AutoDelete = true
-		case "false":
-			c.Pull.AutoDelete = false
-		default:
-			return fmt.Errorf("invalid pull.autoDelete %q (want true or false)", value)
-		}
-	case "ui.color":
-		switch value {
-		case ColorAuto, ColorAlways, ColorNever:
-			c.UI.Color = value
-		default:
-			return fmt.Errorf("invalid ui.color %q (want one of: auto, always, never)", value)
-		}
-	default:
-		return fmt.Errorf("unknown config key %q", key)
+	f, err := lookupField(key)
+	if err != nil {
+		return err
 	}
-	return nil
+	return f.set(c, value)
 }
 
 // Keys lists every known dotted config key, in stable display order.
 func Keys() []string {
-	return []string{"ai.driver", "ai.customCommand", "pull.autoDelete", "ui.color"}
+	keys := make([]string, len(fields))
+	for i, f := range fields {
+		keys[i] = f.key
+	}
+	return keys
 }
