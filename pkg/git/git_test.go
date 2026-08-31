@@ -298,6 +298,34 @@ func TestLocalBranchExists(t *testing.T) {
 	}
 }
 
+func TestDeleteLocalBranch(t *testing.T) {
+	newTestRepo(t)
+	runGit(t, "branch", "feature")
+
+	if err := DeleteLocalBranch("feature"); err != nil {
+		t.Fatalf("DeleteLocalBranch() error = %v", err)
+	}
+	if LocalBranchExists("feature") {
+		t.Error("LocalBranchExists(feature) = true after DeleteLocalBranch(), want false")
+	}
+
+	t.Run("deletes even an unmerged branch", func(t *testing.T) {
+		runGit(t, "branch", "unmerged")
+		runGit(t, "checkout", "unmerged")
+		writeFile(t, "only-on-branch.txt", "x\n")
+		runGit(t, "add", "only-on-branch.txt")
+		runGit(t, "commit", "-m", "commit not on main")
+		runGit(t, "checkout", "main")
+
+		if err := DeleteLocalBranch("unmerged"); err != nil {
+			t.Fatalf("DeleteLocalBranch() error = %v", err)
+		}
+		if LocalBranchExists("unmerged") {
+			t.Error("LocalBranchExists(unmerged) = true after DeleteLocalBranch(), want false")
+		}
+	})
+}
+
 func TestPush(t *testing.T) {
 	newTestRepo(t)
 	remoteDir := newBareRemote(t)

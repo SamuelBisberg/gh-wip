@@ -205,6 +205,16 @@ func LocalBranchExists(name string) bool {
 	return err == nil
 }
 
+// DeleteLocalBranch force-deletes a local branch regardless of its merge
+// status. Force is required because WIP branches are typically restored via
+// a squash merge (MergeSquash), which git doesn't record as an ancestor of
+// the branch it merged into, so a plain `git branch -d` would refuse them as
+// "not fully merged" even after their changes have safely landed elsewhere.
+func DeleteLocalBranch(name string) error {
+	_, err := run("branch", "-D", name)
+	return err
+}
+
 // Push pushes a local branch to the remote, setting up tracking.
 func Push(remote, branch string) error {
 	_, err := run("push", "-u", remote, branch)

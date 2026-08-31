@@ -15,7 +15,7 @@ func TestNewRootCmd(t *testing.T) {
 		t.Errorf("Version = %q, want %q", root.Version, "v1.2.3")
 	}
 
-	wantSubcommands := []string{"push", "pull", "config"}
+	wantSubcommands := []string{"push", "pull", "config", "cleanup"}
 	for _, name := range wantSubcommands {
 		if root.Commands() == nil {
 			t.Fatalf("root has no subcommands, want at least %v", wantSubcommands)
